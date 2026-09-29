@@ -1,0 +1,4 @@
+level,label,alert_minutes
+1,P1 Urgent,15
+2,P2 Today,120
+3,P3 Routine,1440

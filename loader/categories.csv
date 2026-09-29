@@ -1,0 +1,11 @@
+id,icon,label_en,label_sr,default_department,default_priority,sort,active
+tv,📺,TV or remote,TV ili daljinski,IT and AV,3,10,yes
+water,🚿,Water or bathroom,Voda ili kupatilo,Maintenance,3,20,yes
+ac,❄️,AC or heating,Klima ili grejanje,Maintenance,3,30,yes
+power,💡,Lights or power,Svetlo ili struja,Maintenance,3,40,yes
+wifi,📶,Wi-Fi,Wi-Fi,IT and AV,3,50,yes
+damage,🛋️,Furniture or damage,Nameštaj ili oštećenje,Maintenance,3,60,yes
+pests,🐜,Insects or pests,Insekti ili štetočine,Housekeeping,2,70,yes
+lost,🎒,Lost property,Izgubljene stvari,Reception,3,80,yes
+safety,⚠️,Safety hazard,Opasnost,Maintenance,1,90,yes
+other,💬,Other,Ostalo,Reception,3,100,yes

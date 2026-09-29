@@ -1,0 +1,4 @@
+loader/.env
+loader/pins_issued_*.csv
+__pycache__/
+.DS_Store

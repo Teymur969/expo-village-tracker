@@ -230,6 +230,10 @@ textarea.input{min-height:80px;resize:vertical}
 .stat.a-ooo{border-left-color:var(--pink)}
 .stat.a-old{border-left-color:var(--teal)}
 .stat.a-done{border-left-color:var(--line)}
+.gallery{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0}
+.gitem{position:relative}
+.thumb{width:92px;height:92px;object-fit:cover;border-radius:10px;display:block;background:var(--soft)}
+.gx{position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;border:0;background:var(--ink);color:#fff;font-size:15px;line-height:20px;cursor:pointer;padding:0}
 </style>
 </head>
 <body>
@@ -248,8 +252,8 @@ textarea.input{min-height:80px;resize:vertical}
    (sb_secret_...) or the legacy service_role key here.
    ===================================================================== */
 var CONFIG={
-  SUPABASE_URL:'https://zpdxfmvthejkhdrrxlsm.supabase.co',
-  SUPABASE_KEY:'sb_publishable_LmFUNRBW_zJ9UcHm0-JKuQ__dCKNIZx',
+  SUPABASE_URL:'https://YOUR-PROJECT-REF.supabase.co',
+  SUPABASE_KEY:'sb_publishable_REPLACE_ME',
   STAFF_EMAIL_DOMAIN:'crowdedevents.com',   /* must match STAFF_EMAIL_DOMAIN in loader/.env */
   USE_INSPECTED:true                        /* false hides the Inspected status (open decision) */
 };
@@ -909,19 +913,25 @@ function openNewTicket(room){
     '<div class="field"><label for="n_desc">What the guest or staff member said</label><textarea class="input" id="n_desc" maxlength="2000"></textarea></div>'+
     
     '<div class="field" style="flex:1"><label for="n_dept">Department</label><select class="input" id="n_dept">'+D.depts.map(function(d){return '<option>'+esc(d)+'</option>'}).join('')+'</select></div>'+
-    '<label class="toggle" style="font-size:14px"><span>Room cannot be used (sets it to Out of order)</span><input type="checkbox" id="n_un"></label>'+
+    '<label class="toggle" style="font-size:14px"><span>Room cannot be used (sets it to Out of order)</span><input type="checkbox" id="n_un"></label>'+'<label class="btn" style="display:flex;gap:10px;align-items:center;padding:13px 16px;font-size:15px">📸 <span id="n_phlbl">Add photo (optional)</span><input type="file" id="n_ph" accept="image/*" style="display:none"></label>'+'<p class="note" style="margin:-4px 0 0 4px">No photos of guests or documents.</p>'+'<img class="photo" id="n_phimg" alt="" style="display:none">'+
     '<div class="err" id="n_err"></div><button class="btn primary" id="n_go" style="padding:13px">Create request</button></div>';
   openLayer(h,'new',null);
   var syncCat=function(){var c=cat($('#n_cat').value);$('#n_dept').value=c.default_department};
   $('#n_cat').onchange=syncCat; if(D.cats.length)syncCat();
+  var pend={blob:null};
+  $('#n_ph').onchange=function(e){var fl=e.target.files&&e.target.files[0];if(!fl)return;compress(fl,function(url,blob){pend.blob=blob;var im=$('#n_phimg');im.src=url;im.style.display='block';$('#n_phlbl').textContent='Photo added'})};
   $('#n_go').onclick=async function(){
     var rm=findRoom($('#n_room').value,null);
     if(!rm){$('#n_err').textContent='Room not found. Pick one from the list.';return}
+    var gb=$('#n_go'); gb.disabled=true; var glbl=gb.textContent; gb.textContent='Saving…';
+    var path=null, photoFail=false;
+    if(pend.blob){ path=ME.id+'/'+uid()+'.jpg';
+      try{var up=await sb.storage.from(PHOTO_BUCKET).upload(path,pend.blob,{contentType:'image/jpeg',upsert:false}); if(up.error){path=null;photoFail=true}}catch(e){path=null;photoFail=true} }
     var t=await act('create_request',{p_room:rm,p_category:$('#n_cat').value,p_source:$('#n_src').value,p_description:$('#n_desc').value.trim(),
-      p_department:$('#n_dept').value,p_unusable:$('#n_un').checked,p_photo_path:null});
-    if(!t)return;
+      p_department:$('#n_dept').value,p_unusable:$('#n_un').checked,p_photo_path:path});
+    if(!t){gb.disabled=false; gb.textContent=glbl; return}
     applyReq(t); if(t.room_unusable)await refreshRoom(t.room_id);
-    closeLayer(); rerenderKeep(); showToast(t.id+' created');
+    closeLayer(); rerenderKeep(); showToast(t.id+' created'+(photoFail?', photo failed to upload':''));
   };
 }
 
@@ -933,7 +943,6 @@ async function openTicketModal(id){
   var h='<div class="hd"><h2>'+esc(t.id)+'</h2><span class="chip '+tsClass(t.status)+'">'+esc(t.status)+'</span><button class="x" aria-label="Close">×</button></div>'+
     '<h3 style="font-size:18px">'+esc(c.icon)+' '+esc(c.label_en)+', room '+esc(t.room_id)+'</h3>'+
     (t.description?'<p>'+esc(t.description)+'</p>':'<p class="muted">No description.</p>')+
-    (t.photo_path?'<img class="photo" id="m_photo" alt="Photo attached to '+esc(t.id)+'" style="min-height:60px;background:var(--soft)">':'')+
     '<dl class="meta"><dt>Source</dt><dd>'+esc(t.source)+'</dd><dt>Created</dt><dd>'+fmtDT(ms(t.created_at))+' by '+esc(t.created_by)+'</dd>'+
     '<dt>Department</dt><dd>'+esc(t.department)+'</dd>'+
     '<dt>Age</dt><dd>'+(closed?'Closed after '+dur(ms(t.closed_at)-ms(t.created_at)):dur(now()-ms(t.created_at)))+'</dd>'+
@@ -955,7 +964,7 @@ async function openTicketModal(id){
   } else {
     h+='<div class="section">'+(sup?'<button class="btn" id="m_reopen">Reopen request</button>':'<p class="muted small">Reopening a closed request needs a supervisor.</p>')+'</div>';
   }
-  h+='<div class="section"><h3>Add a note</h3><div class="row"><input class="input" id="m_note" style="flex:1" placeholder="Update for the log" maxlength="1000"><button class="btn" id="m_ngo">Add</button></div></div>'+
+  h+='<div class="section"><h3>Add a note</h3><div class="row"><input class="input" id="m_note" style="flex:1" placeholder="Update for the log" maxlength="1000"><button class="btn" id="m_ngo">Add</button></div></div>'+'<div class="section"><h3>Photos</h3><div class="gallery" id="m_gallery"><p class="muted small">Loading…</p></div><label class="btn" style="display:inline-flex;gap:8px;align-items:center;margin-top:10px">📸 <span>Add photo</span><input type="file" id="mp_in" accept="image/*" style="display:none"></label> <span class="muted small" id="mp_msg"></span></div>'+
     '<div class="section"><h3>History</h3><div class="hist" id="m_hist"><div class="muted">Loading…</div></div></div>';
   openLayer(h,'ticket',id);
   var done=function(row){if(!row)return;applyReq(row);rerenderKeep(function(){openTicketModal(id)})};
@@ -981,7 +990,23 @@ async function openTicketModal(id){
     var ro=$('#m_reopen'); if(ro)ro.onclick=async function(){done(await act('reopen_request',{p_id:id,p_note:''}))};
   }
   $('#m_ngo').onclick=async function(){var n=$('#m_note').value.trim();if(!n)return;done(await act('add_request_note',{p_id:id,p_note:n}))};
-  if(t.photo_path){sb.storage.from(PHOTO_BUCKET).createSignedUrl(t.photo_path,600).then(function(r){var im=$('#m_photo');if(im&&r.data)im.src=r.data.signedUrl})}
+  var mpin=$('#mp_in'); if(mpin)mpin.onchange=function(e){var fl=e.target.files&&e.target.files[0];if(!fl)return;var msg=$('#mp_msg');if(msg)msg.textContent='Uploading…';
+    compress(fl,async function(url,blob){var path=ME.id+'/'+uid()+'.jpg',okup=false;
+      try{var up=await sb.storage.from(PHOTO_BUCKET).upload(path,blob,{contentType:'image/jpeg',upsert:false});if(!up.error)okup=true}catch(e){}
+      if(!okup){if(msg)msg.textContent='Upload failed.';return}
+      done(await act('add_request_photo',{p_id:id,p_photo_path:path}));})};
+  (async function(){
+    var g=$('#m_gallery'); if(!g||MODAL.id!==id)return;
+    var items=[]; if(t.photo_path)items.push({path:t.photo_path,id:null});
+    var pr=await sb.from('request_photos').select('*').eq('request_id',id).order('at');
+    if(!pr.error&&pr.data)pr.data.forEach(function(x){items.push({path:x.path,id:x.id})});
+    if(MODAL.id!==id)return; g=$('#m_gallery'); if(!g)return;
+    if(!items.length){g.innerHTML='<p class="muted small">No photos attached.</p>';return}
+    var urls=await Promise.all(items.map(function(it){return sb.storage.from(PHOTO_BUCKET).createSignedUrl(it.path,600).then(function(r){return r.data?r.data.signedUrl:null}).catch(function(){return null})}));
+    if(MODAL.id!==id)return; g=$('#m_gallery'); if(!g)return;
+    g.innerHTML=items.map(function(it,i){var u=urls[i]; if(!u)return ''; return '<div class="gitem"><a href="'+u+'" target="_blank" rel="noopener"><img class="thumb" src="'+u+'" alt="Photo for '+esc(id)+'"></a>'+(it.id?'<button class="gx" data-ph="'+esc(it.id)+'" aria-label="Remove photo">×</button>':'')+'</div>'}).join('')||'<p class="muted small">No photos attached.</p>';
+    $all('[data-ph]',g).forEach(function(b){b.onclick=async function(){if(!window.confirm('Remove this photo?'))return;done(await act('remove_request_photo',{p_photo_id:b.dataset.ph}))}});
+  })();
   var ev=await sb.from('request_events').select('*').eq('request_id',id).order('at',{ascending:false}).limit(200);
   var el=$('#m_hist'); if(!el||MODAL.id!==id)return;
   el.innerHTML=ev.error?'<div class="muted">'+esc(errText(ev.error))+'</div>':ev.data.map(function(x){return '<div><b>'+fmtDT(ms(x.at))+'</b> '+esc(x.by_staff)+': '+esc(x.action)+'</div>'}).join('');
@@ -1008,10 +1033,11 @@ async function exportCSV(kind){
     if(kind==='tickets'){
       var all=await fetchAll('requests',function(q){return q.order('id')});
       var ev=await fetchAll('request_events',function(q){return q.order('id')});
+      var ph=await fetchAll('request_photos',function(q){return q.order('request_id')}); var pcount={}; ph.forEach(function(x){pcount[x.request_id]=(pcount[x.request_id]||0)+1});
       var hist={}; ev.forEach(function(e){(hist[e.request_id]=hist[e.request_id]||[]).push(csvTime(e.at)+' '+e.by_staff+': '+e.action)});
-      rows=[['Request ID','Room','Building','Category','Source','Description','Department','Status','Room unusable','Created at','Created by','Closed at','Closure reason','Duplicate of','Clock minutes (excl. On Hold)','Has photo','History']];
+      rows=[['Request ID','Room','Building','Category','Source','Description','Department','Status','Room unusable','Created at','Created by','Closed at','Closure reason','Duplicate of','Clock minutes (excl. On Hold)','Photos','History']];
       all.forEach(function(t){var r=D.rooms[t.room_id];rows.push([t.id,t.room_id,r?r.building:'',cat(t.category_id).label_en,t.source,t.description,t.department,t.status,t.room_unusable?'Yes':'No',
-        csvTime(t.created_at),t.created_by,csvTime(t.closed_at),t.closure_reason==='Duplicate'?'Duplicate of [ID]':(t.closure_reason||''),t.duplicate_of||'',Math.round(runMs(t)/60000),t.photo_path?'Yes':'No',(hist[t.id]||[]).join(' | ')])});
+        csvTime(t.created_at),t.created_by,csvTime(t.closed_at),t.closure_reason==='Duplicate'?'Duplicate of [ID]':(t.closure_reason||''),t.duplicate_of||'',Math.round(runMs(t)/60000),String((t.photo_path?1:0)+(pcount[t.id]||0)),(hist[t.id]||[]).join(' | ')])});
       name='expo_village_requests_'+stamp+'.csv';
     } else if(kind==='rooms'){
       var rs=await fetchAll('rooms',function(q){return q.eq('active',true).order('id')});
